@@ -12,7 +12,7 @@ The folder data-files contains the CSV files generated in our experiment.
  
  The file apps-sok-third-part.txt contains the third part of the exploits.
 
- The folder algorithms contain the rough Python code for each algorithm.
+ The folder algorithms contain the rough Python code for each algorithm. (This README will be updated)
 
  **Cite**
 

@@ -10,21 +10,34 @@ from sklearn import metrics
 from sklearn.preprocessing import OneHotEncoder
 from sklearn import preprocessing
 from sklearn.model_selection import GridSearchCV
-import pickle
+import testpkl
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_curve, auc, roc_auc_score
 import matplotlib
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import gaussian_filter1d
 
+
 # %matplotlib inline
 matplotlib.rcParams.update({'font.size': 20})
 
-supervised_path = 'train_test_supervised_with_timestamp/'
-file1 = open('apps-sok-first-part.txt', 'r')
-Lines = file1.readlines()
-file2 = open('apps-sok-first-part.txt', 'r')
-Lines2 = file2.readlines()
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+supervised_path = os.path.join(BASE_DIR, 'train_test_supervised_with_timestamp/')
+
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+apps_file_path = os.path.join(BASE_DIR, '../data-files/apps-sok-reduced.txt')
+
+
+with open(apps_file_path, 'r') as file1:
+    Lines = file1.readlines()
+
+with open(apps_file_path, 'r') as file2:
+    Lines2 = file2.readlines()
+
+
 list_of_train = [1, 2, 3, 4]
 list_of_test = [1, 2, 3, 4]
 df_train_all = pd.DataFrame()

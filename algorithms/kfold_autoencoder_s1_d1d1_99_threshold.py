@@ -1,5 +1,5 @@
 import keras
-import pickle
+import testpkl
 from keras import layers
 import pandas as pd
 from sklearn.metrics import confusion_matrix
@@ -30,10 +30,10 @@ file1 = open('apps-sok.txt', 'r')
 
 train_path = 'train_autoencoder_with_timestamp/'
 test_path  = 'test_autoencoder_with_timestamp/'
-file1 = open('apps-sok-first-part.txt', 'r')
+file1 = open('../data-files/apps-sok-reduced.txt', 'r')
 Lines1= file1.readlines()
 
-file2 = open('apps-sok-first-part.txt', 'r')
+file2 = open('../data-files/apps-sok-reduced.txt', 'r')
 Lines2= file2.readlines()
 list_of_train = [1,2,3,4]
 list_of_test =  [1,2,3,4]

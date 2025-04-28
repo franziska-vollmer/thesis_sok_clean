@@ -9,7 +9,7 @@ from sklearn import metrics
 from sklearn.preprocessing import OneHotEncoder
 from sklearn import preprocessing
 from sklearn.model_selection import GridSearchCV
-import pickle
+import testpkl
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_curve, auc, roc_auc_score
 import matplotlib
@@ -21,9 +21,9 @@ matplotlib.rcParams.update({'font.size': 20})
 
 
 supervised_path = 'train_test_supervised_with_timestamp/'
-file1 = open('apps-sok-first-part.txt', 'r')
+file1 = open('../data-files/apps-sok-reduced.txt', 'r')
 Lines = file1.readlines()
-file2 = open('apps-sok-first-part.txt', 'r')
+file2 = open('../data-files/apps-sok-reduced.txt', 'r')
 Lines2 = file2.readlines()
 list_of_train = [1,2,3,4]
 list_of_test  = [1,2,3,4]

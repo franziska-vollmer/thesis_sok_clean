@@ -5,7 +5,7 @@ import os
 import re
 from collections import defaultdict
 from sklearn.model_selection import GroupKFold
-from sklearn.metrics import precision_score, recall_score, f1_score
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, average_precision_score
 from sklearn.preprocessing import LabelEncoder
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv1D, MaxPooling1D, Flatten, Dense, Dropout, Input
@@ -104,7 +104,7 @@ print(f"X-Shape: {X.shape}, y-Shape: {y.shape}, Anzahl verschiedene CVEs: {len(n
 # === Cross Validation ===
 gkf = GroupKFold(n_splits=n_splits)
 
-all_acc, all_prec, all_rec, all_f1 = [], [], [], []
+fold_results = []
 
 fold = 1
 for train_idx, test_idx in gkf.split(X, y, groups):
@@ -138,26 +138,49 @@ for train_idx, test_idx in gkf.split(X, y, groups):
         verbose=1
     )
 
-    y_pred = (model.predict(X_test) > 0.5).astype("int32")
+    # Vorhersagen
+    y_pred_proba = model.predict(X_test).flatten()
+    y_pred = (y_pred_proba > 0.5).astype("int32")
 
-    acc = np.mean(y_pred.flatten() == y_test.flatten())
+    # Metriken berechnen
+    acc = np.mean(y_pred == y_test)
     prec = precision_score(y_test, y_pred, zero_division=0)
     rec = recall_score(y_test, y_pred, zero_division=0)
     f1 = f1_score(y_test, y_pred, zero_division=0)
+    roc_auc = roc_auc_score(y_test, y_pred_proba)
+    pr_auc = average_precision_score(y_test, y_pred_proba)
 
     print(f"✅ Fold {fold} abgeschlossen.")
-    print(f"Fold {fold} - Accuracy: {acc:.4f} - Precision: {prec:.4f} - Recall: {rec:.4f} - F1-Score: {f1:.4f}")
+    print(f"Fold {fold} - Accuracy: {acc:.4f} - Precision: {prec:.4f} - Recall: {rec:.4f} - F1-Score: {f1:.4f} - ROC-AUC: {roc_auc:.4f} - PR-AUC: {pr_auc:.4f}")
 
-    all_acc.append(acc)
-    all_prec.append(prec)
-    all_rec.append(rec)
-    all_f1.append(f1)
+    fold_results.append({
+        'Fold': fold,
+        'Accuracy': acc,
+        'Precision': prec,
+        'Recall': rec,
+        'F1-Score': f1,
+        'ROC-AUC': roc_auc,
+        'PR-AUC': pr_auc
+    })
 
     fold += 1
 
-# === Gesamtergebnisse ===
-print("\n==== Cross Validation Ergebnisse ====")
-print(f"Durchschnitt Accuracy : {np.mean(all_acc):.4f} (+/- {np.std(all_acc):.4f})")
-print(f"Durchschnitt Precision: {np.mean(all_prec):.4f} (+/- {np.std(all_prec):.4f})")
-print(f"Durchschnitt Recall   : {np.mean(all_rec):.4f} (+/- {np.std(all_rec):.4f})")
-print(f"Durchschnitt F1-Score  : {np.mean(all_f1):.4f} (+/- {np.std(all_f1):.4f})")
+# === Alle Ergebnisse zusammenfassen ===
+fold_results_df = pd.DataFrame(fold_results)
+
+print("\n==== Fold Ergebnisse Tabelle ====")
+print(fold_results_df)
+
+# CSV speichern
+csv_path = "fold_results.csv"
+fold_results_df.to_csv(csv_path, index=False)
+print(f"\n✅ Ergebnisse gespeichert als: {csv_path}")
+
+# Durchschnittswerte ausgeben
+print("\n==== Cross Validation Durchschnittswerte ====")
+print(f"Durchschnitt Accuracy : {fold_results_df['Accuracy'].mean():.4f} (+/- {fold_results_df['Accuracy'].std():.4f})")
+print(f"Durchschnitt Precision: {fold_results_df['Precision'].mean():.4f} (+/- {fold_results_df['Precision'].std():.4f})")
+print(f"Durchschnitt Recall   : {fold_results_df['Recall'].mean():.4f} (+/- {fold_results_df['Recall'].std():.4f})")
+print(f"Durchschnitt F1-Score  : {fold_results_df['F1-Score'].mean():.4f} (+/- {fold_results_df['F1-Score'].std():.4f})")
+print(f"Durchschnitt ROC-AUC   : {fold_results_df['ROC-AUC'].mean():.4f} (+/- {fold_results_df['ROC-AUC'].std():.4f})")
+print(f"Durchschnitt PR-AUC    : {fold_results_df['PR-AUC'].mean():.4f} (+/- {fold_results_df['PR-AUC'].std():.4f})")

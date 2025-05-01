@@ -1,13 +1,10 @@
-# 📦 Bibliotheken
 import os
 import random
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, average_precision_score, accuracy_score
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, average_precision_score
 from tqdm import tqdm
 
 # 📂 Ordner mit Pickle-Dateien
@@ -29,12 +26,12 @@ all_cves = [
 ]
 
 # 📋 Einstellungen
-n_runs = 5        # Anzahl der Trainingsdurchläufe (Folds)
-n_test_cves = 5   # Wieviele unbekannte CVEs werden ausgelassen
+n_runs = 5        # Anzahl Wiederholungen
+n_test_cves = 5   # Anzahl Test-CVEs
 
 fold_results = []
 
-# 🚀 EINMAL zufällig Test- und Trainings-CVEs bestimmen
+# 🚀 Schritt 1: EINMAL zufällig Test- und Trainings-CVEs bestimmen
 random.shuffle(all_cves)
 test_cves = all_cves[:n_test_cves]
 train_cves = all_cves[n_test_cves:]
@@ -59,7 +56,6 @@ y_train = train_data.iloc[:, -1].values
 X_test = test_data.iloc[:, :-1].values
 y_test = test_data.iloc[:, -1].values
 
-# 🧹 Label-Korrektur (-1 ➔ 0)
 y_train = np.where(y_train == -1, 0, y_train)
 y_test = np.where(y_test == -1, 0, y_test)
 
@@ -68,16 +64,36 @@ scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-# 🚀 5 Trainings- und Testdurchläufe
+# 🚀 Schritt 2: Signature-Matrizen und Umstrukturierung der Daten für LSTM
+def compute_signature_matrix(segment):
+    return np.dot(segment.T, segment) / segment.shape[0]
+
+window_size = 10
+X_train_windows = []
+X_test_windows = []
+
+# Segmentierung und Erstellung von Signature-Matrizen
+for i in range(window_size, len(X_train_scaled)):
+    window = X_train_scaled[i - window_size:i]
+    X_train_windows.append(compute_signature_matrix(window))
+
+for i in range(window_size, len(X_test_scaled)):
+    window = X_test_scaled[i - window_size:i]
+    X_test_windows.append(compute_signature_matrix(window))
+
+X_train_lstm = np.array(X_train_windows)
+X_test_lstm = np.array(X_test_windows)
+
+# 🚀 Schritt 3: 5x Modell neu initialisieren, neu trainieren, testen
 for run in range(1, n_runs + 1):
     print(f"\n🚀 Starte Fold {run}/{n_runs}")
 
-    # Modell neu initialisieren
+    # Modell neu bauen (ConvLSTM basierend auf MSCRED)
     model = tf.keras.Sequential([
-        tf.keras.layers.Input(shape=(X_train_scaled.shape[1],)),
-        tf.keras.layers.Dense(512, activation='relu'),
-        tf.keras.layers.Dropout(0.2),
-        tf.keras.layers.Dense(256, activation='relu'),
+        tf.keras.layers.Input(shape=(X_train_lstm.shape[1], X_train_lstm.shape[2])),
+        tf.keras.layers.Conv1D(64, 3, activation='relu', padding='same'),
+        tf.keras.layers.LSTM(512, activation='relu', return_sequences=True),
+        tf.keras.layers.LSTM(256, activation='relu'),
         tf.keras.layers.Dropout(0.2),
         tf.keras.layers.Dense(128, activation='relu'),
         tf.keras.layers.Dropout(0.15),
@@ -88,26 +104,24 @@ for run in range(1, n_runs + 1):
 
     early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
 
-    # Training
-    model.fit(X_train_scaled, y_train, epochs=30, batch_size=256, validation_split=0.2, verbose=0, callbacks=[early_stop])
+    # Trainieren
+    history = model.fit(X_train_lstm, y_train, epochs=30, batch_size=256, validation_split=0.2, verbose=0, callbacks=[early_stop])
 
     # Testen
-    y_pred_probs = model.predict(X_test_scaled, verbose=0)
+    y_pred_probs = model.predict(X_test_lstm, verbose=0)
     y_pred = (y_pred_probs > 0.5).astype(int).flatten()
 
     f1 = f1_score(y_test, y_pred)
     precision = precision_score(y_test, y_pred)
     recall = recall_score(y_test, y_pred)
-    accuracy = accuracy_score(y_test, y_pred)
     roc_auc = roc_auc_score(y_test, y_pred_probs)
     pr_auc = average_precision_score(y_test, y_pred_probs)
 
     fold_results.append({
         "Fold": run,
-        "F1-Score": round(f1, 4),
+        "F1": round(f1, 4),
         "Precision": round(precision, 4),
         "Recall": round(recall, 4),
-        "Accuracy": round(accuracy, 4),
         "ROC-AUC": round(roc_auc, 4),
         "PR-AUC": round(pr_auc, 4)
     })
@@ -124,6 +138,3 @@ print(results_df.mean(numeric_only=True))
 
 print("\n📈 Standardabweichungen über alle Folds:")
 print(results_df.std(numeric_only=True))
-
-# 📦 Optional: Speichere CSV
-results_df.to_csv("fold_results_with_accuracy.csv", index=False)

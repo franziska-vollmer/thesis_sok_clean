@@ -1,15 +1,12 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import KFold
-from sklearn.preprocessing import StandardScaler
-from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import KFold, train_test_split
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, precision_recall_curve, auc
-import matplotlib.pyplot as plt
 from tqdm import tqdm
 import os
-import random
 
 # Tabelle zur Speicherung der Ergebnisse
 results_table = []
@@ -44,53 +41,45 @@ X_scaled = X_scaled.reshape((X_scaled.shape[0], 1, X_scaled.shape[1]))  # 1 time
 label_encoder = LabelEncoder()
 y = label_encoder.fit_transform(y)
 
-# Schritt 6: CVEs aufteilen
-# Angenommen, jede Datei entspricht einem bestimmten CVE. Wir extrahieren die CVEs aus den Dateinamen
-cves = [file.split('.')[0] for file in data_files]
+# Schritt 6: Train-Test Split (80% Training, 20% Test)
+X_train_full, X_test, y_train_full, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
 
-# Schritt 7: KFold Setup
-kf = KFold(n_splits=5, shuffle=True, random_state=42)
+# Schritt 7: Cross-Validation Setup für das Trainingsset
+kf = KFold(n_splits=5, shuffle=True, random_state=42)  # 5 Folds Cross-Validation
 
-# Schritt 8: Cross-Validation durchführen
-for fold_num, (train_idx, test_idx) in enumerate(kf.split(X_scaled)):
+# Schritt 8: Modell erstellen
+model = Sequential()
+model.add(LSTM(units=50, return_sequences=True, input_shape=(X_train_full.shape[1], X_train_full.shape[2])))
+model.add(Dropout(0.2))
+model.add(LSTM(units=50))
+model.add(Dropout(0.2))
+model.add(Dense(units=1, activation='sigmoid'))  # Sigmoid für binäre Klassifikation
+
+# Schritt 9: Modell kompilieren
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+# Schritt 10: Cross-Validation durchführen und Metriken berechnen
+for fold_num, (train_idx, val_idx) in enumerate(kf.split(X_train_full)):
     print(f"\nFold {fold_num + 1}:")
     
-    # Train und Test CVEs für dieses Fold
-    train_cves = [cves[i] for i in train_idx]
-    test_cves = [cves[i] for i in test_idx]
-
-    print(f"Train CVEs: {train_cves}")
-    print(f"Test CVEs: {test_cves}")
-
-    # Filtere die Daten basierend auf den Train- und Test-CVEs
-    X_train, X_test = X_scaled[train_idx], X_scaled[test_idx]
-    y_train, y_test = y[train_idx], y[test_idx]
-
-    # Modell erstellen
-    model = Sequential()
-    model.add(LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
-    model.add(Dropout(0.2))
-    model.add(LSTM(units=50))
-    model.add(Dropout(0.2))
-    model.add(Dense(units=1, activation='sigmoid'))  # Sigmoid für binäre Klassifikation
-
-    # Modell kompilieren
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    # Daten für diesen Fold vorbereiten
+    X_train, X_val = X_train_full[train_idx], X_train_full[val_idx]
+    y_train, y_val = y_train_full[train_idx], y_train_full[val_idx]
 
     # Modell trainieren
-    model.fit(X_train, y_train, epochs=10, batch_size=64, validation_data=(X_test, y_test), verbose=0)
-
-    # Vorhersagen auf den Testdaten
-    y_pred = (model.predict(X_test) > 0.5).astype("int32")
-
-    # Berechnung der Metriken
-    precision = precision_score(y_test, y_pred)
-    recall = recall_score(y_test, y_pred)
-    f1 = f1_score(y_test, y_pred)
-    auc_value = roc_auc_score(y_test, y_pred)
-
+    model.fit(X_train, y_train, epochs=10, batch_size=64, validation_data=(X_val, y_val), verbose=0)
+    
+    # Vorhersagen auf den Validierungsdaten
+    y_pred_val = (model.predict(X_val) > 0.5).astype("int32")
+    
+    # Berechnung von Precision, Recall, F1-Score, AUC und PR-AUC
+    precision = precision_score(y_val, y_pred_val)
+    recall = recall_score(y_val, y_pred_val)
+    f1 = f1_score(y_val, y_pred_val)
+    auc_value = roc_auc_score(y_val, y_pred_val)
+    
     # PR-AUC
-    precision_curve, recall_curve, _ = precision_recall_curve(y_test, model.predict(X_test))
+    precision_curve, recall_curve, _ = precision_recall_curve(y_val, model.predict(X_val))
     pr_auc = auc(recall_curve, precision_curve)
 
     # Ergebnisse für dieses Fold speichern
@@ -110,12 +99,36 @@ for fold_num, (train_idx, test_idx) in enumerate(kf.split(X_scaled)):
     print(f"ROC-AUC: {auc_value:.4f}")
     print(f"PR-AUC: {pr_auc:.4f}")
 
-# Schritt 9: Ergebnisse in einer Tabelle anzeigen
+# Schritt 11: Modell auf dem gesamten Trainingsset trainieren und auf dem Testset bewerten
+# Nach der Cross-Validation das Modell auf den gesamten Trainingsdaten trainieren
+model.fit(X_train_full, y_train_full, epochs=10, batch_size=64, verbose=0)
+
+# Testen des Modells auf den Testdaten
+y_pred_test = (model.predict(X_test) > 0.5).astype("int32")
+
+# Berechnung von Precision, Recall, F1-Score, AUC und PR-AUC auf dem Testset
+precision_test = precision_score(y_test, y_pred_test)
+recall_test = recall_score(y_test, y_pred_test)
+f1_test = f1_score(y_test, y_pred_test)
+auc_value_test = roc_auc_score(y_test, y_pred_test)
+
+# PR-AUC auf dem Testset
+precision_curve_test, recall_curve_test, _ = precision_recall_curve(y_test, model.predict(X_test))
+pr_auc_test = auc(recall_curve_test, precision_curve_test)
+
+print(f"\nTestset Metriken:")
+print(f"F1-Score: {f1_test:.4f}")
+print(f"Precision: {precision_test:.4f}")
+print(f"Recall: {recall_test:.4f}")
+print(f"ROC-AUC: {auc_value_test:.4f}")
+print(f"PR-AUC: {pr_auc_test:.4f}")
+
+# Schritt 12: Ergebnisse in einer Tabelle anzeigen
 results_df = pd.DataFrame(results_table)
 
 # Ausgabe der Tabelle im Terminal
 print("\nFold Results:")
 print(results_df)
 
-# Schritt 10: Modell speichern
+# Schritt 13: Modell speichern
 model.save('nids_lstm_model.keras')  # Speichern im Keras-native Format

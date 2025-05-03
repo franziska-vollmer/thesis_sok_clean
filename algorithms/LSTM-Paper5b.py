@@ -71,7 +71,6 @@ class_weights = dict(enumerate(class_weights))
 # 7. KFold Cross-Validation
 kf = KFold(n_splits=5, shuffle=True, random_state=42)
 
-# Liste für Ergebnisse
 results = []
 
 # Fortschrittsanzeige für Folds
@@ -128,3 +127,41 @@ print(f"Durchschnittlicher Recall: {results_df['Recall'].mean():.4f}")
 print(f"Durchschnittlicher F1-Score: {results_df['F1-Score'].mean():.4f}")
 print(f"Durchschnittlicher ROC-AUC: {results_df['ROC-AUC'].mean():.4f}")
 print(f"Durchschnittlicher PR-AUC: {results_df['PR-AUC'].mean():.4f}")
+
+# 8. Testdaten vorbereiten (sie dürfen nie in den Folds auftauchen!)
+# Hier wird angenommen, dass du X_test und y_test hast.
+train_size = int(len(combined_data) * 0.8)  # 80% für Training
+X_train, y_train = combined_data.iloc[:train_size, :-1].values, combined_data.iloc[:train_size, -1].values
+X_test, y_test = combined_data.iloc[train_size:, :-1].values, combined_data.iloc[train_size:, -1].values
+
+# Skalierung der Testdaten mit dem gleichen Scaler wie die Trainingsdaten
+X_test_scaled = scaler.transform(X_test)
+
+# Umwandlung der Testdaten in Zeitreihensequenzen
+X_test_lstm, y_test_lstm = create_dataset(X_test_scaled, y_test, time_step)
+
+# Endgültige Modell-Trainierung mit allen Trainingsdaten aus der Cross-Validation
+final_model = Sequential()
+final_model.add(LSTM(units=50, return_sequences=False, input_shape=(X_lstm_resampled.shape[1], X_lstm_resampled.shape[2])))
+final_model.add(Dropout(0.2))
+final_model.add(Dense(1, activation='tanh'))
+final_model.compile(optimizer=Adam(), loss='mean_squared_error', metrics=['accuracy'])
+
+# Training mit allen Daten aus der Cross-Validation (X_lstm_resampled, y_lstm_resampled)
+final_model.fit(X_lstm_resampled, y_lstm_resampled, epochs=10, batch_size=64)
+
+# Endgültige Vorhersage auf Testdaten
+final_predictions = final_model.predict(X_test_lstm)
+final_predictions = np.round(final_predictions)
+
+# Testmetriken berechnen
+final_accuracy = accuracy_score(y_test_lstm, final_predictions)
+final_classification_rep = classification_report(y_test_lstm, final_predictions, output_dict=True)
+final_roc_auc = roc_auc_score(y_test_lstm, final_predictions)
+final_pr_auc = average_precision_score(y_test_lstm, final_predictions)
+
+print(f"Finale Precision: {final_classification_rep['1.0']['precision']:.4f}")
+print(f"Finaler Recall: {final_classification_rep['1.0']['recall']:.4f}")
+print(f"Finaler F1-Score: {final_classification_rep['1.0']['f1-score']:.4f}")
+print(f"Finaler ROC-AUC: {final_roc_auc:.4f}")
+print(f"Finaler PR-AUC: {final_pr_auc:.4f}")

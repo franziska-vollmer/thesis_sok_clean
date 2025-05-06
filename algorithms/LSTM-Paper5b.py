@@ -1,16 +1,13 @@
 import os
 import numpy as np
 import pandas as pd
-import tensorflow as tf
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import KFold
+from sklearn.metrics import accuracy_score, classification_report, roc_auc_score, average_precision_score
+from imblearn.over_sampling import SMOTE
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.optimizers import Adam
-from sklearn.metrics import accuracy_score, classification_report, roc_auc_score, average_precision_score
-from sklearn.model_selection import KFold
-from imblearn.over_sampling import SMOTE
-from sklearn.utils.class_weight import compute_class_weight
-from tqdm import tqdm  # Fortschrittsanzeige
 
 # 1. Verzeichnis durchsuchen, um alle .pkl Dateien zu finden
 directory_path = '/home/franziska/sok-utsa-tuda-evalutation-of-docker-containers/algorithms/train_test_supervised_with_timestamp/'
@@ -23,7 +20,6 @@ dfs = []
 for file in pkl_files:
     file_path = os.path.join(directory_path, file)
     print(f"Lade Datei: {file_path}")
-    
     try:
         data = pd.read_pickle(file_path)
         dfs.append(data)  # DataFrame der Liste hinzufügen
@@ -33,11 +29,7 @@ for file in pkl_files:
 # 3. Kombinieren aller DataFrames zu einem einzigen DataFrame
 combined_data = pd.concat(dfs, ignore_index=True)
 
-# Anzeigen der ersten Zeilen des kombinierten DataFrames
-print(combined_data.head())
-
-# 4. Vorverarbeitung der Daten:
-# Die letzte Spalte ist das Label, alle anderen sind die Merkmale
+# Vorverarbeitung
 X = combined_data.iloc[:, :-1].values  # Merkmale
 y = combined_data.iloc[:, -1].values   # Labels
 
@@ -56,7 +48,7 @@ def create_dataset(X, y, time_step=1):
 
 X_lstm, y_lstm = create_dataset(X_scaled, y, time_step)
 
-# 5. SMOTE anwenden
+# SMOTE anwenden
 smote = SMOTE(random_state=42)
 X_lstm_flat, y_lstm_flat = smote.fit_resample(X_lstm.reshape(X_lstm.shape[0], -1), y_lstm)
 
@@ -64,58 +56,56 @@ X_lstm_flat, y_lstm_flat = smote.fit_resample(X_lstm.reshape(X_lstm.shape[0], -1
 X_lstm_resampled = X_lstm_flat.reshape(X_lstm_flat.shape[0], time_step, X_lstm.shape[2])
 y_lstm_resampled = y_lstm_flat
 
-# 6. Berechnung der Klassen-Gewichte
-class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(y_lstm_resampled), y=y_lstm_resampled)
-class_weights = dict(enumerate(class_weights))
+# 7. Testdaten erstellen, die nicht in der Cross-Validation verwendet werden
+train_size = int(len(combined_data) * 0.8)  # 80% für Training, 20% für Test
+X_train, y_train = combined_data.iloc[:train_size, :-1].values, combined_data.iloc[:train_size, -1].values
+X_test, y_test = combined_data.iloc[train_size:, :-1].values, combined_data.iloc[train_size:, -1].values
 
-# 7. KFold Cross-Validation
+# Skalierung der Testdaten
+X_test_scaled = scaler.transform(X_test)
+X_test_lstm, y_test_lstm = create_dataset(X_test_scaled, y_test, time_step)
+
+# KFold Cross-Validation (hier wird das Testset nie verwendet)
 kf = KFold(n_splits=5, shuffle=True, random_state=42)
 
 results = []
 
 # Fortschrittsanzeige für Folds
 for fold, (train_index, val_index) in enumerate(kf.split(X_lstm_resampled), 1):
-    X_train, X_val = X_lstm_resampled[train_index], X_lstm_resampled[val_index]
-    y_train, y_val = y_lstm_resampled[train_index], y_lstm_resampled[val_index]
+    X_train_fold, X_val_fold = X_lstm_resampled[train_index], X_lstm_resampled[val_index]
+    y_train_fold, y_val_fold = y_lstm_resampled[train_index], y_lstm_resampled[val_index]
 
     # Modell erstellen
     model = Sequential()
-    model.add(LSTM(units=50, return_sequences=False, input_shape=(X_train.shape[1], X_train.shape[2])))
+    model.add(LSTM(units=50, return_sequences=False, input_shape=(X_train_fold.shape[1], X_train_fold.shape[2])))
     model.add(Dropout(0.2))
     model.add(Dense(1, activation='tanh'))
     model.compile(optimizer=Adam(), loss='mean_squared_error', metrics=['accuracy'])
 
-    # Fortschrittsanzeige während des Trainings
-    print(f"Training Fold {fold}...")
-    history = model.fit(X_train, y_train, epochs=10, batch_size=64, validation_data=(X_val, y_val),
-                        class_weight=class_weights, verbose=0)  # verbose=0 für Fortschrittsanzeige
+    # Training des Modells
+    model.fit(X_train_fold, y_train_fold, epochs=10, batch_size=64, validation_data=(X_val_fold, y_val_fold), verbose=0)
 
-    # Vorhersagen und Metriken berechnen
-    predictions = model.predict(X_val)
-    predictions = np.round(predictions)  # Rundung auf -1 oder 1
+    # Vorhersagen auf dem **Testset** für jedes Fold
+    final_predictions = model.predict(X_test_lstm)
+    final_predictions = np.round(final_predictions)
 
-    # Berechnung der verschiedenen Metriken
-    accuracy = accuracy_score(y_val, predictions)
-    classification_rep = classification_report(y_val, predictions, output_dict=True)
+    # Berechnung der Metriken für das **Testset** pro Fold
+    final_classification_rep = classification_report(y_test_lstm, final_predictions, output_dict=True, zero_division=1)
+    final_roc_auc = roc_auc_score(y_test_lstm, final_predictions)
+    final_pr_auc = average_precision_score(y_test_lstm, final_predictions)
 
-    # ROC-AUC und PR-AUC
-    roc_auc = roc_auc_score(y_val, predictions)
-    pr_auc = average_precision_score(y_val, predictions)
-
-    # Speichern der Ergebnisse für den aktuellen Fold
+    # Speichern der Ergebnisse für das Testset des aktuellen Folds
     results.append({
         "Fold": fold,
-        "Precision": classification_rep['1.0']['precision'],
-        "Recall": classification_rep['1.0']['recall'],
-        "F1-Score": classification_rep['1.0']['f1-score'],
-        "ROC-AUC": roc_auc,
-        "PR-AUC": pr_auc
+        "Precision": final_classification_rep['1.0']['precision'],
+        "Recall": final_classification_rep['1.0']['recall'],
+        "F1-Score": final_classification_rep['1.0']['f1-score'],
+        "ROC-AUC": final_roc_auc,
+        "PR-AUC": final_pr_auc
     })
 
-# Ergebnisse in DataFrame umwandeln
+# Ergebnisse der Cross-Validation auf den Testdaten anzeigen
 results_df = pd.DataFrame(results)
-
-# Ausgabe der Ergebnisse im Terminal
 print("\nFOLD | Precision | Recall | F1-Score | ROC-AUC | PR-AUC")
 for index, row in results_df.iterrows():
     print(f"{row['Fold']} | {row['Precision']:.4f} | {row['Recall']:.4f} | {row['F1-Score']:.4f} | {row['ROC-AUC']:.4f} | {row['PR-AUC']:.4f}")
@@ -127,41 +117,3 @@ print(f"Durchschnittlicher Recall: {results_df['Recall'].mean():.4f}")
 print(f"Durchschnittlicher F1-Score: {results_df['F1-Score'].mean():.4f}")
 print(f"Durchschnittlicher ROC-AUC: {results_df['ROC-AUC'].mean():.4f}")
 print(f"Durchschnittlicher PR-AUC: {results_df['PR-AUC'].mean():.4f}")
-
-# 8. Testdaten vorbereiten (sie dürfen nie in den Folds auftauchen!)
-# Hier wird angenommen, dass du X_test und y_test hast.
-train_size = int(len(combined_data) * 0.8)  # 80% für Training
-X_train, y_train = combined_data.iloc[:train_size, :-1].values, combined_data.iloc[:train_size, -1].values
-X_test, y_test = combined_data.iloc[train_size:, :-1].values, combined_data.iloc[train_size:, -1].values
-
-# Skalierung der Testdaten mit dem gleichen Scaler wie die Trainingsdaten
-X_test_scaled = scaler.transform(X_test)
-
-# Umwandlung der Testdaten in Zeitreihensequenzen
-X_test_lstm, y_test_lstm = create_dataset(X_test_scaled, y_test, time_step)
-
-# Endgültige Modell-Trainierung mit allen Trainingsdaten aus der Cross-Validation
-final_model = Sequential()
-final_model.add(LSTM(units=50, return_sequences=False, input_shape=(X_lstm_resampled.shape[1], X_lstm_resampled.shape[2])))
-final_model.add(Dropout(0.2))
-final_model.add(Dense(1, activation='tanh'))
-final_model.compile(optimizer=Adam(), loss='mean_squared_error', metrics=['accuracy'])
-
-# Training mit allen Daten aus der Cross-Validation (X_lstm_resampled, y_lstm_resampled)
-final_model.fit(X_lstm_resampled, y_lstm_resampled, epochs=10, batch_size=64)
-
-# Endgültige Vorhersage auf Testdaten
-final_predictions = final_model.predict(X_test_lstm)
-final_predictions = np.round(final_predictions)
-
-# Testmetriken berechnen
-final_accuracy = accuracy_score(y_test_lstm, final_predictions)
-final_classification_rep = classification_report(y_test_lstm, final_predictions, output_dict=True)
-final_roc_auc = roc_auc_score(y_test_lstm, final_predictions)
-final_pr_auc = average_precision_score(y_test_lstm, final_predictions)
-
-print(f"Finale Precision: {final_classification_rep['1.0']['precision']:.4f}")
-print(f"Finaler Recall: {final_classification_rep['1.0']['recall']:.4f}")
-print(f"Finaler F1-Score: {final_classification_rep['1.0']['f1-score']:.4f}")
-print(f"Finaler ROC-AUC: {final_roc_auc:.4f}")
-print(f"Finaler PR-AUC: {final_pr_auc:.4f}")

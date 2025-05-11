@@ -1,135 +1,98 @@
-# ==========================
-# 1. Alle CSV-Dateien laden
-# ==========================
-
-import pandas as pd
-import numpy as np
-import glob
 import os
-
-print("Starte Datenvorbereitung...")
-
-# Basis-Pfad zu deinen Daten
-base_path = '/home/franziska/sok-utsa-tuda-evalutation-of-docker-containers/data-files'
-
-X = []
-y = []
-
-sampling_rate = 0.1  # 0.1 Sekunden pro Zeile
-threshold_seconds = 180  # 3 Minuten Grenze
-
-cve_folders = [f.path for f in os.scandir(base_path) if f.is_dir()]
-
-for cve_folder in cve_folders:
-    csv_files = glob.glob(os.path.join(cve_folder, '*_freqvector_full.csv'))
-    
-    for file in csv_files:
-        print(f"Lade Datei: {file}")
-        df = pd.read_csv(file)
-
-        if 'timestamp' in df.columns:
-            df = df.drop(columns=['timestamp'])
-
-        data = df.values
-
-        times = np.arange(len(data)) * sampling_rate
-        labels = (times >= threshold_seconds).astype(int)
-
-        if data.shape[1] < 576:
-            pad_width = 576 - data.shape[1]
-            data = np.pad(data, ((0, 0), (0, pad_width)), mode='constant')
-
-        data = data.reshape((-1, 24, 24, 1))
-
-        X.append(data)
-        y.append(labels)
-
-print("Alle Daten geladen und vorbereitet!")
-
-X = np.vstack(X)
-y = np.concatenate(y)
-
-print(f"Feature-Matrix Shape: {X.shape}")
-print(f"Label-Matrix Shape: {y.shape}")
-
-# ==========================
-# 2. CNN Modell trainieren
-# ==========================
-
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix, classification_report
-import matplotlib.pyplot as plt
-import seaborn as sns
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
+import numpy as np
+import pandas as pd
+import pickle
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_score, roc_curve
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, LSTM, RepeatVector
 from tensorflow.keras.callbacks import EarlyStopping
+import matplotlib.pyplot as plt
 
-print("Splitte Daten in Training und Test...")
+# === Einstellungen ===
+timesteps = 10  # Anzahl Zeitschritte
+latent_dim = 64  # Dimension des LSTM-Encodings
+data_dir = '/Pfad/zu/deinen/pkl_dateien/'
+apps = ['beispielapp1', 'beispielapp2']  # passe an
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
-)
+# === Hilfsfunktion zum Laden der Daten ===
+def load_data(apps, indices=[1,2,3,4]):
+    X_all, y_all = [], []
+    for app in apps:
+        for i in indices:
+            path = os.path.join(data_dir, f'{app}-{i}.pkl')
+            if not os.path.exists(path):
+                continue
+            with open(path, 'rb') as f:
+                df = pickle.load(f)
+            df_features = df.drop(index=556).astype(float)
+            labels = df.loc[556].astype(int).values
+            X = df_features.T.values
+            y = labels
+            X_all.append(X)
+            y_all.append(y)
+    X_all = np.vstack(X_all)
+    y_all = np.concatenate(y_all)
+    return X_all, y_all
 
-print(f"Trainingssamples: {X_train.shape[0]}")
-print(f"Testsamples: {X_test.shape[0]}")
+# === Daten vorbereiten ===
+X_raw, y = load_data(apps)
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X_raw)
 
-print("Erzeuge CNN-Modell...")
+# === Sequenzbildung ===
+n_samples = len(X_scaled) // timesteps
+X_seq = X_scaled[:n_samples * timesteps].reshape(n_samples, timesteps, -1)
+y_seq = y[:n_samples * timesteps].reshape(n_samples, timesteps)
+y_seq_majority = (np.mean(y_seq, axis=1) > 0.5).astype(int)  # 1, wenn Mehrheit anomal ist
 
-model = Sequential([
-    Conv2D(32, (3, 3), activation='relu', input_shape=(24, 24, 1)),
-    MaxPooling2D((2, 2)),
-    Conv2D(64, (3, 3), activation='relu'),
-    MaxPooling2D((2, 2)),
-    Flatten(),
-    Dense(128, activation='relu'),
-    Dropout(0.5),
-    Dense(1, activation='sigmoid')
-])
+# === Nur normale Daten für Training verwenden ===
+X_train = X_seq[y_seq_majority == 0]
 
-model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+# === LSTM-Autoencoder definieren ===
+input_shape = (timesteps, X_seq.shape[2])
+inputs = Input(shape=input_shape)
+encoded = LSTM(latent_dim)(inputs)
+decoded = RepeatVector(timesteps)(encoded)
+decoded = LSTM(input_shape[1], return_sequences=True)(decoded)
+autoencoder = Model(inputs, decoded)
+autoencoder.compile(optimizer='adam', loss='mse')
 
-early_stop = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
+# === Training ===
+early_stop = EarlyStopping(patience=5, restore_best_weights=True)
+autoencoder.fit(X_train, X_train,
+                epochs=50,
+                batch_size=64,
+                validation_split=0.1,
+                shuffle=True,
+                callbacks=[early_stop],
+                verbose=1)
 
-print("Starte CNN-Training...")
+# === Rekonstruktionsfehler berechnen ===
+X_pred = autoencoder.predict(X_seq)
+recon_error = np.mean(np.square(X_seq - X_pred), axis=(1, 2))
 
-history = model.fit(
-    X_train, y_train,
-    epochs=20,
-    batch_size=64,
-    validation_split=0.2,
-    callbacks=[early_stop]
-)
+# === Beste Schwelle via F1-Optimierung finden ===
+thresholds = np.linspace(min(recon_error), max(recon_error), 100)
+f1_scores = [f1_score(y_seq_majority, recon_error > t) for t in thresholds]
+best_thresh = thresholds[np.argmax(f1_scores)]
 
-print("Training abgeschlossen. Starte Evaluation...")
+# === Vorhersage und Metriken ===
+y_pred = (recon_error > best_thresh).astype(int)
 
-# Modell evaluieren
-loss, accuracy = model.evaluate(X_test, y_test)
-print(f"Test Accuracy: {accuracy:.4f}")
+print("\n== Ergebnisse ==")
+print(f"Beste Schwelle: {best_thresh:.4f}")
+print(f"F1-Score:       {f1_score(y_seq_majority, y_pred):.4f}")
+print(f"Precision:      {precision_score(y_seq_majority, y_pred):.4f}")
+print(f"Recall:         {recall_score(y_seq_majority, y_pred):.4f}")
+print(f"ROC-AUC:        {roc_auc_score(y_seq_majority, recon_error):.4f}")
 
-# Vorhersagen
-y_pred = (model.predict(X_test) > 0.5).astype(int)
-
-# ==========================
-# 3. Ergebnisse visualisieren
-# ==========================
-
-print("Erzeuge Confusion Matrix...")
-
-cm = confusion_matrix(y_test, y_pred)
-plt.figure(figsize=(6,4))
-sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=["Normal", "Anomal"], yticklabels=["Normal", "Anomal"])
-plt.xlabel('Predicted')
-plt.ylabel('True')
-plt.title('Confusion Matrix')
+# === Optional: ROC-Kurve plotten ===
+fpr, tpr, _ = roc_curve(y_seq_majority, recon_error)
+plt.plot(fpr, tpr, label='ROC Curve')
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Curve – LSTM Autoencoder')
+plt.legend()
+plt.grid(True)
 plt.show()
-
-# Classification Report
-print(classification_report(y_test, y_pred, target_names=["Normal", "Anomal"]))
-
-# ==========================
-# 4. Modell speichern
-# ==========================
-
-model.save('cnn_model_cve_anomaly.h5')
-print("Modell erfolgreich gespeichert als 'cnn_model_cve_anomaly.h5' ✅")

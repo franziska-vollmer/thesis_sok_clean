@@ -76,6 +76,10 @@ plt.savefig("top_features_global_hd.png", dpi=300, bbox_inches="tight")
 
 plt.show()
 
+print("Top 20 Feature-Indizes (bezogen auf df.iloc[:, 1:556]):")
+print(top_indices.tolist())
+
+
 # === Optional: CSV-Export ===
 # pd.DataFrame({
 #     "Feature": top_features,

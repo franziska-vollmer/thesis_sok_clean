@@ -13,7 +13,8 @@ from sklearn.metrics import (
     roc_curve,
     auc,
     precision_recall_curve,
-    average_precision_score
+    average_precision_score,
+    accuracy_score
 )
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Dense
@@ -30,7 +31,7 @@ apps_file_path = os.path.join(BASE_DIR, '../data-files/apps-sok-reduced.txt')
 
 train_indices = [1, 2, 3, 4]
 test_indices = [1, 2, 3, 4]
-n_folds = 5
+n_folds = 5  # Anzahl der Cross-Validation-Runden
 
 def extract_xy_from_df(df):
     df_features = df.drop(index=556).astype(float)
@@ -62,9 +63,10 @@ def load_app_data(app_list, indices):
     X_all = [x[:, :min_len] for x in X_all]
     return np.vstack(X_all), np.concatenate(y_all)
 
+# Apps laden
 with open(apps_file_path, 'r') as f:
     all_apps = [line.strip() for line in f.readlines() if line.strip()]
-assert len(all_apps) >= 45, "Mindestens 40 Apps/CVEs nötig."
+assert len(all_apps) >= 45, "Mindestens 45 Apps/CVEs nötig."
 
 results = []
 
@@ -73,11 +75,12 @@ for fold in range(n_folds):
 
     random.shuffle(all_apps)
     train_apps = all_apps[:45]
-    test_apps = train_apps  # Testdaten = Trainingsdaten
+    test_apps = all_apps[45:50]
 
     X_train_raw, y_train = load_app_data(train_apps, train_indices)
     X_test_raw, y_test = load_app_data(test_apps, test_indices)
 
+    # Features angleichen
     min_features = min(X_train_raw.shape[1], X_test_raw.shape[1])
     X_train_raw = X_train_raw[:, :min_features]
     X_test_raw = X_test_raw[:, :min_features]
@@ -89,6 +92,7 @@ for fold in range(n_folds):
     X_train_scaled = scaler.fit_transform(X_train_normal)
     X_test_scaled = scaler.transform(X_test_raw)
 
+    # Autoencoder Modell
     input_dim = X_train_scaled.shape[1]
     input_layer = Input(shape=(input_dim,))
     encoded = Dense(64, activation="relu")(input_layer)
@@ -112,6 +116,7 @@ for fold in range(n_folds):
     X_test_pred = autoencoder.predict(X_test_scaled)
     reconstruction_error = np.mean(np.square(X_test_scaled - X_test_pred), axis=1)
 
+    # ROC-AUC
     fpr, tpr, thresholds = roc_curve(y_test_binary, reconstruction_error)
     f1s = [f1_score(y_test_binary, (reconstruction_error > t).astype(int)) for t in thresholds]
     best_thresh = thresholds[np.argmax(f1s)]
@@ -122,8 +127,12 @@ for fold in range(n_folds):
     recall = classification_report(y_test_binary, y_pred, output_dict=True, zero_division=0)["1"]["recall"]
     auc_score = auc(fpr, tpr)
 
+    # PR-AUC
     precision_vals, recall_vals, pr_thresholds = precision_recall_curve(y_test_binary, reconstruction_error)
     pr_auc = average_precision_score(y_test_binary, reconstruction_error)
+
+    # Accuracy
+    accuracy = accuracy_score(y_test_binary, y_pred)
 
     results.append({
         "fold": fold + 1,
@@ -131,7 +140,8 @@ for fold in range(n_folds):
         "precision": precision,
         "recall": recall,
         "auc": auc_score,
-        "pr_auc": pr_auc
+        "pr_auc": pr_auc,
+        "accuracy": accuracy  # Hinzufügen der Genauigkeit
     })
 
 # === Ergebnisse anzeigen ===
@@ -140,10 +150,11 @@ precisions = [r["precision"] for r in results]
 recalls = [r["recall"] for r in results]
 aucs = [r["auc"] for r in results]
 pr_aucs = [r["pr_auc"] for r in results]
+accuracies = [r["accuracy"] for r in results]  # Genauigkeit speichern
 
-print("\n Cross-Validation Ergebnisse (Train == Test):")
+print("\n Cross-Validation Ergebnisse (auf 5 Test-CVEs pro Fold):")
 for r in results:
-    print(f"Fold {r['fold']}: F1={r['f1']:.4f}, Precision={r['precision']:.4f}, Recall={r['recall']:.4f}, AUC={r['auc']:.4f}, PR-AUC={r['pr_auc']:.4f}")
+    print(f"Fold {r['fold']}: F1={r['f1']:.4f}, Precision={r['precision']:.4f}, Recall={r['recall']:.4f}, AUC={r['auc']:.4f}, PR-AUC={r['pr_auc']:.4f}, Accuracy={r['accuracy']:.4f}")
 
 print("\n Durchschnitt:")
 print(f"F1: {np.mean(f1s):.4f} ± {np.std(f1s):.4f}")
@@ -151,3 +162,4 @@ print(f"Precision: {np.mean(precisions):.4f} ± {np.std(precisions):.4f}")
 print(f"Recall: {np.mean(recalls):.4f} ± {np.std(recalls):.4f}")
 print(f"AUC: {np.mean(aucs):.4f} ± {np.std(aucs):.4f}")
 print(f"PR-AUC: {np.mean(pr_aucs):.4f} ± {np.std(pr_aucs):.4f}")
+print(f"Accuracy: {np.mean(accuracies):.4f} ± {np.std(accuracies):.4f}")  # Durchschnittliche Genauigkeit anzeigen

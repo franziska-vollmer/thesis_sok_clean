@@ -93,6 +93,7 @@ for run in range(1, n_runs + 1):
     y_pred_probs = model.predict(X_test_scaled, verbose=0)
     y_pred = (y_pred_probs > 0.5).astype(int).flatten()
 
+    accuracy = (y_pred == y_test).mean()
     f1 = f1_score(y_test, y_pred)
     precision = precision_score(y_test, y_pred)
     recall = recall_score(y_test, y_pred)
@@ -101,6 +102,7 @@ for run in range(1, n_runs + 1):
 
     fold_results.append({
         "Fold": run,
+        "Accuracy": round(accuracy, 4),
         "F1": round(f1, 4),
         "Precision": round(precision, 4),
         "Recall": round(recall, 4),
@@ -112,11 +114,12 @@ for run in range(1, n_runs + 1):
 results_df = pd.DataFrame(fold_results)
 
 # 📋 Ausgabe
-print("\n📋 Fold-Ergebnisse:")
-print(results_df.to_string(index=False))
 
 print("\n📈 Mittelwerte über alle Folds:")
 print(results_df.mean(numeric_only=True))
 
 print("\n📈 Standardabweichungen über alle Folds:")
 print(results_df.std(numeric_only=True))
+
+print("\n📋 Fold-Ergebnisse:")
+print(results_df.to_string(index=False))

@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import KFold
-from sklearn.metrics import accuracy_score, classification_report, roc_auc_score, average_precision_score
+from sklearn.metrics import accuracy_score, classification_report, roc_auc_score, average_precision_score, accuracy_score
 from imblearn.over_sampling import SMOTE
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import GRU, Dense, Dropout
@@ -93,26 +93,31 @@ for fold, (train_index, val_index) in enumerate(kf.split(X_lstm_resampled), 1):
     final_classification_rep = classification_report(y_test_lstm, final_predictions, output_dict=True, zero_division=1)
     final_roc_auc = roc_auc_score(y_test_lstm, final_predictions)
     final_pr_auc = average_precision_score(y_test_lstm, final_predictions)
+    final_accuracy = accuracy_score(y_test_lstm, final_predictions,)
+
 
     # Speichern der Ergebnisse für das Testset des aktuellen Folds
     results.append({
         "Fold": fold,
         "Precision": final_classification_rep['1.0']['precision'],
+        "Accuracy": final_accuracy,
         "Recall": final_classification_rep['1.0']['recall'],
         "F1-Score": final_classification_rep['1.0']['f1-score'],
         "ROC-AUC": final_roc_auc,
         "PR-AUC": final_pr_auc
+
     })
 
 # Ergebnisse der Cross-Validation auf den Testdaten anzeigen
 results_df = pd.DataFrame(results)
-print("\nFOLD | Precision | Recall | F1-Score | ROC-AUC | PR-AUC")
+print("\nFOLD | Precision | Accuracy | Recall | F1-Score | ROC-AUC | PR-AUC")
 for index, row in results_df.iterrows():
-    print(f"{row['Fold']} | {row['Precision']:.4f} | {row['Recall']:.4f} | {row['F1-Score']:.4f} | {row['ROC-AUC']:.4f} | {row['PR-AUC']:.4f}")
+    print(f"{row['Fold']} | {row['Precision']:.4f} | {row['Accuracy']:.4f} | {row['Recall']:.4f} | {row['F1-Score']:.4f} | {row['ROC-AUC']:.4f} | {row['PR-AUC']:.4f}")
 
 # Durchschnittliche Metriken berechnen
 print("\nDurchschnittliche Metriken über alle 5 Folds:")
 print(f"Durchschnittliche Precision: {results_df['Precision'].mean():.4f}")
+print(f"Durchschnittliche Accuracy: {results_df['Accuracy'].mean():.4f}")
 print(f"Durchschnittlicher Recall: {results_df['Recall'].mean():.4f}")
 print(f"Durchschnittlicher F1-Score: {results_df['F1-Score'].mean():.4f}")
 print(f"Durchschnittlicher ROC-AUC: {results_df['ROC-AUC'].mean():.4f}")

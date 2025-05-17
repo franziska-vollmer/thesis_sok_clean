@@ -1,5 +1,3 @@
-# Komplettes angepasstes Skript: CNN mit 5-Fold Cross-Validation + pro Fold Test auf dynamisch gewählte unbekannte CVEs
-
 import os
 import glob
 import random
@@ -7,7 +5,7 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, accuracy_score, average_precision_score
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv1D, MaxPooling1D, Flatten, Dense
 from tensorflow.keras.optimizers import Adam
@@ -74,7 +72,6 @@ def main():
     X_train_full = np.expand_dims(X_train_full, axis=2)
 
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-
     fold_results = []
 
     for fold, (train_idx, val_idx) in enumerate(skf.split(X_train_full, y_train_full), 1):
@@ -86,7 +83,7 @@ def main():
         model = create_cnn_model((X_train_full.shape[1], 1))
         model.fit(X_tr, y_tr, epochs=10, batch_size=64, verbose=0)
 
-        # === Dynamische Wahl der unbekannten CVEs
+        # Dynamische Auswahl von Testdaten
         sample_size = min(len(test_files), 5 * 4)
         unseen_sample = random.sample(test_files, sample_size)
         X_unseen, y_unseen = load_files(unseen_sample)
@@ -97,23 +94,39 @@ def main():
         y_pred_probs = model.predict(X_unseen)
         y_pred = (y_pred_probs > 0.5).astype(int).flatten()
 
+        # Metriken berechnen
         precision = precision_score(y_unseen, y_pred)
         recall = recall_score(y_unseen, y_pred)
         f1 = f1_score(y_unseen, y_pred)
         auc = roc_auc_score(y_unseen, y_pred_probs)
+        pr_auc = average_precision_score(y_unseen, y_pred_probs)
+        accuracy = accuracy_score(y_unseen, y_pred)
 
-        fold_results.append({'Fold': fold, 'F1': f1, 'Precision': precision, 'Recall': recall, 'AUC': auc})
+        fold_results.append({
+            'Fold': fold,
+            'Accuracy': accuracy,
+            'Precision': precision,
+            'Recall': recall,
+            'F1': f1,
+            'AUC': auc,
+            'PR_AUC': pr_auc
+        })
 
-        print(f"Fold {fold} Ergebnisse: F1={f1:.4f}, Precision={precision:.4f}, Recall={recall:.4f}, AUC={auc:.4f}")
+        print(f"Fold {fold} Ergebnisse: "
+              f"Accuracy={accuracy:.4f}, Precision={precision:.4f}, Recall={recall:.4f}, "
+              f"F1={f1:.4f}, AUC={auc:.4f}, PR_AUC={pr_auc:.4f}")
 
+    # Ergebnisse als DataFrame
     results_df = pd.DataFrame(fold_results)
+    results_df = results_df[['Fold', 'Accuracy', 'Precision', 'Recall', 'F1', 'AUC', 'PR_AUC']]
 
-    print("\n=== Cross-Validation Ergebnisse ===")
-    print(results_df.to_string(index=False))
+    # Durchschnitt berechnen und hinzufügen
+    mean_values = results_df.drop(columns='Fold').mean(numeric_only=True)
+    mean_row = pd.DataFrame([['Durchschnitt'] + mean_values.tolist()],
+                            columns=['Fold', 'Accuracy', 'Precision', 'Recall', 'F1', 'AUC', 'PR_AUC'])
 
-    print("\n=== Durchschnittswerte ===")
-    mean_df = results_df.mean(numeric_only=True)
-    print(mean_df.to_frame().T.to_string(index=False))
+    final_df = pd.concat([results_df, mean_row], ignore_index=True)
 
-if __name__ == "__main__":
-    main()
+    # Ausgabe
+    print("\n=== 📊 Gesamtergebnis ===")
+    print(final_df.to_string(index=False, float_format="%.4f"))

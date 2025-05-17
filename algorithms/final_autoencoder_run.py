@@ -13,7 +13,8 @@ from sklearn.metrics import (
     roc_curve,
     auc,
     precision_recall_curve,
-    average_precision_score
+    average_precision_score,
+    accuracy_score
 )
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Dense
@@ -130,13 +131,17 @@ for fold in range(n_folds):
     precision_vals, recall_vals, pr_thresholds = precision_recall_curve(y_test_binary, reconstruction_error)
     pr_auc = average_precision_score(y_test_binary, reconstruction_error)
 
+   # Accuracy
+    accuracy = accuracy_score(y_test_binary, y_pred)
+
     results.append({
         "fold": fold + 1,
         "f1": f1,
         "precision": precision,
         "recall": recall,
         "auc": auc_score,
-        "pr_auc": pr_auc
+        "pr_auc": pr_auc,
+        "accuracy": accuracy  # Hinzufügen der Genauigkeit
     })
 
 # === Ergebnisse anzeigen ===
@@ -145,10 +150,11 @@ precisions = [r["precision"] for r in results]
 recalls = [r["recall"] for r in results]
 aucs = [r["auc"] for r in results]
 pr_aucs = [r["pr_auc"] for r in results]
+accuracies = [r["accuracy"] for r in results]  # Genauigkeit speichern
 
 print("\n Cross-Validation Ergebnisse (auf 5 Test-CVEs pro Fold):")
 for r in results:
-    print(f"Fold {r['fold']}: F1={r['f1']:.4f}, Precision={r['precision']:.4f}, Recall={r['recall']:.4f}, AUC={r['auc']:.4f}, PR-AUC={r['pr_auc']:.4f}")
+    print(f"Fold {r['fold']}: F1={r['f1']:.4f}, Precision={r['precision']:.4f}, Recall={r['recall']:.4f}, AUC={r['auc']:.4f}, PR-AUC={r['pr_auc']:.4f}, Accuracy={r['accuracy']:.4f}")
 
 print("\n Durchschnitt:")
 print(f"F1: {np.mean(f1s):.4f} ± {np.std(f1s):.4f}")
@@ -156,3 +162,6 @@ print(f"Precision: {np.mean(precisions):.4f} ± {np.std(precisions):.4f}")
 print(f"Recall: {np.mean(recalls):.4f} ± {np.std(recalls):.4f}")
 print(f"AUC: {np.mean(aucs):.4f} ± {np.std(aucs):.4f}")
 print(f"PR-AUC: {np.mean(pr_aucs):.4f} ± {np.std(pr_aucs):.4f}")
+print(f"Accuracy: {np.mean(accuracies):.4f} ± {np.std(accuracies):.4f}")  # Durchschnittliche Genauigkeit anzeigen
+
+

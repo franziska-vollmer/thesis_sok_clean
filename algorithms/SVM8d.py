@@ -7,7 +7,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 from sklearn.metrics import (
     precision_score, recall_score, f1_score,
-    roc_auc_score, average_precision_score
+    roc_auc_score, average_precision_score, accuracy_score
 )
 
 # === PARAMETER ===
@@ -91,18 +91,21 @@ for fold_idx in range(NUM_FOLDS):
     f1 = f1_score(y_test, y_pred, pos_label=1, zero_division=0)
     roc_auc = roc_auc_score(y_test, y_score)
     pr_auc = average_precision_score(y_test, y_score)
+    accuracy = accuracy_score(y_test, y_pred)
 
     results.append({
         "Fold": fold_idx + 1,
         "F1": round(f1, 4),
         "Precision": round(precision, 4),
+        "Accuracy": round(accuracy, 4),
         "Recall": round(recall, 4),
         "ROC AUC": round(roc_auc, 4),
         "PR AUC": round(pr_auc, 4)
     })
 
-    print(f"  ✅ F1={f1:.4f}, Precision={precision:.4f}, Recall={recall:.4f}, ROC AUC={roc_auc:.4f}, PR AUC={pr_auc:.4f}")
-    print(f"  🕒 Dauer: {time.time() - fold_start:.2f} Sekunden")
+    print(f"  ✅ F1={f1:.4f}, Precision={precision:.4f}, Recall={recall:.4f}, Accuracy={accuracy:.4f}, ROC AUC={auc:.4f}, PR AUC={pr_auc:.4f}")
+    print(f"  🕒 Dauer für Fold {fold_idx}: {time.time() - fold_start:.2f} Sekunden")
+
 
 # === ERGEBNISSE ZUSAMMENFASSEN ===
 df_results = pd.DataFrame(results)
@@ -114,6 +117,7 @@ print("\n📊 Durchschnittswerte:")
 print(f"F1-Score     : {df_results['F1'].mean():.4f}")
 print(f"Precision    : {df_results['Precision'].mean():.4f}")
 print(f"Recall       : {df_results['Recall'].mean():.4f}")
+print(f"Accuracy     : {df_results['Accuracy'].mean():.4f}") 
 print(f"ROC AUC      : {df_results['ROC AUC'].mean():.4f}")
 print(f"PR AUC       : {df_results['PR AUC'].mean():.4f}")
 

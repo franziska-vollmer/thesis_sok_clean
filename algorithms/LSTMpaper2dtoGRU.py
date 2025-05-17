@@ -4,7 +4,7 @@ from sklearn.model_selection import KFold, train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import GRU, Dense, Dropout
-from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, precision_recall_curve, auc
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, precision_recall_curve, auc, accuracy_score
 from tqdm import tqdm
 import os
 
@@ -77,6 +77,7 @@ for fold_num, (train_idx, val_idx) in enumerate(kf.split(X_train_full)):
     recall = recall_score(y_val, y_pred_val)
     f1 = f1_score(y_val, y_pred_val)
     auc_value = roc_auc_score(y_val, y_pred_val)
+    accuracy = accuracy_score(y_val, y_pred_val)
     
     # PR-AUC
     precision_curve, recall_curve, _ = precision_recall_curve(y_val, model.predict(X_val))
@@ -87,6 +88,7 @@ for fold_num, (train_idx, val_idx) in enumerate(kf.split(X_train_full)):
         'Fold': fold_num + 1,
         'F1-Score': f1,
         'Precision': precision,
+        'Accuracy': accuracy,
         'Recall': recall,
         'ROC-AUC': auc_value,
         'PR-AUC': pr_auc
@@ -95,6 +97,7 @@ for fold_num, (train_idx, val_idx) in enumerate(kf.split(X_train_full)):
     # Ausgabe der Metriken für dieses Fold
     print(f"F1-Score: {f1:.4f}")
     print(f"Precision: {precision:.4f}")
+    print(f"Accuracy: {accuracy:.4f}")
     print(f"Recall: {recall:.4f}")
     print(f"ROC-AUC: {auc_value:.4f}")
     print(f"PR-AUC: {pr_auc:.4f}")
@@ -108,6 +111,7 @@ y_pred_test = (model.predict(X_test) > 0.5).astype("int32")
 
 # Berechnung von Precision, Recall, F1-Score, AUC und PR-AUC auf dem Testset
 precision_test = precision_score(y_test, y_pred_test)
+accuracy_test = accuracy_score(y_test, y_pred_test)
 recall_test = recall_score(y_test, y_pred_test)
 f1_test = f1_score(y_test, y_pred_test)
 auc_value_test = roc_auc_score(y_test, y_pred_test)
@@ -119,6 +123,7 @@ pr_auc_test = auc(recall_curve_test, precision_curve_test)
 print(f"\nTestset Metriken:")
 print(f"F1-Score: {f1_test:.4f}")
 print(f"Precision: {precision_test:.4f}")
+print(f"Accuracy: {accuracy_test:.4f}")
 print(f"Recall: {recall_test:.4f}")
 print(f"ROC-AUC: {auc_value_test:.4f}")
 print(f"PR-AUC: {pr_auc_test:.4f}")

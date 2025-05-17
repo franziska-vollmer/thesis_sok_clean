@@ -110,6 +110,7 @@ for fold, (train_index, val_index) in enumerate(kf.split(X_lstm_resampled), 1):
     # Speichern der Ergebnisse für den aktuellen Fold
     results.append({
         "Fold": fold,
+        "Accuracy": accuracy,  # Genauigkeit hinzugefügt
         "Precision": classification_rep['1.0']['precision'],
         "Recall": classification_rep['1.0']['recall'],
         "F1-Score": classification_rep['1.0']['f1-score'],
@@ -121,12 +122,13 @@ for fold, (train_index, val_index) in enumerate(kf.split(X_lstm_resampled), 1):
 results_df = pd.DataFrame(results)
 
 # Ausgabe der Ergebnisse im Terminal
-print("\nFOLD | Precision | Recall | F1-Score | ROC-AUC | PR-AUC")
+print("\nFOLD | Accuracy | Precision | Recall | F1-Score | ROC-AUC | PR-AUC")
 for index, row in results_df.iterrows():
-    print(f"{row['Fold']} | {row['Precision']:.4f} | {row['Recall']:.4f} | {row['F1-Score']:.4f} | {row['ROC-AUC']:.4f} | {row['PR-AUC']:.4f}")
+    print(f"{row['Fold']} | {row['Accuracy']:.4f} | {row['Precision']:.4f} | {row['Recall']:.4f} | {row['F1-Score']:.4f} | {row['ROC-AUC']:.4f} | {row['PR-AUC']:.4f}")
 
 # Durchschnittliche Metriken berechnen
 print("\nDurchschnittliche Metriken über alle 5 Folds:")
+print(f"Durchschnittliche Accuracy: {results_df['Accuracy'].mean():.4f}")
 print(f"Durchschnittliche Precision: {results_df['Precision'].mean():.4f}")
 print(f"Durchschnittlicher Recall: {results_df['Recall'].mean():.4f}")
 print(f"Durchschnittlicher F1-Score: {results_df['F1-Score'].mean():.4f}")

@@ -1,13 +1,13 @@
-# Komplettes angepasstes Skript für deine Anforderungen:
-# 5-Fold Training auf definierten CVEs + finaler Test auf unbekannten CVEs
-
 import os
 import glob
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.metrics import (
+    precision_score, recall_score, f1_score, roc_auc_score,
+    accuracy_score, average_precision_score
+)
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv1D, MaxPooling1D, Flatten, Dense
 from tensorflow.keras.optimizers import Adam
@@ -98,11 +98,22 @@ def main():
         recall = recall_score(y_val, y_pred)
         f1 = f1_score(y_val, y_pred)
         auc = roc_auc_score(y_val, y_pred_probs)
+        pr_auc = average_precision_score(y_val, y_pred_probs)
+        accuracy = accuracy_score(y_val, y_pred)
 
-        fold_results.append({'Fold': fold, 'F1': f1, 'Precision': precision, 'Recall': recall, 'AUC': auc})
-        models.append(model)
+        fold_results.append({
+            'Fold': fold,
+            'F1': f1,
+            'Precision': precision,
+            'Recall': recall,
+            'AUC': auc,
+            'PR_AUC': pr_auc,
+            'Accuracy': accuracy
+        })
+        models.append((model, f1))
 
-        print(f"Fold {fold} Ergebnisse: F1={f1:.4f}, Precision={precision:.4f}, Recall={recall:.4f}, AUC={auc:.4f}")
+        print(f"Fold {fold} Ergebnisse: F1={f1:.4f}, Precision={precision:.4f}, "
+              f"Recall={recall:.4f}, AUC={auc:.4f}, PR_AUC={pr_auc:.4f}, Accuracy={accuracy:.4f}")
 
     results_df = pd.DataFrame(fold_results)
 
@@ -114,8 +125,8 @@ def main():
     print(mean_df.to_frame().T.to_string(index=False))
 
     # === Teste bestes Modell auf unbekannten CVEs ===
-    best_model = models[-1]  # Nehme das letzte Modell
-    print("\n🚀 Teste auf unbekannten CVEs...")
+    best_model, best_f1 = max(models, key=lambda x: x[1])
+    print("\n🚀 Teste bestes Modell (Fold mit F1={:.4f}) auf unbekannten CVEs...".format(best_f1))
 
     y_unseen_probs = best_model.predict(X_unseen)
     y_unseen_pred = (y_unseen_probs > 0.5).astype(int).flatten()
@@ -124,9 +135,12 @@ def main():
     recall = recall_score(y_unseen, y_unseen_pred)
     f1 = f1_score(y_unseen, y_unseen_pred)
     auc = roc_auc_score(y_unseen, y_unseen_probs)
+    pr_auc = average_precision_score(y_unseen, y_unseen_probs)
+    accuracy = accuracy_score(y_unseen, y_unseen_pred)
 
     print("\n=== Ergebnisse auf unbekannten CVEs ===")
-    print(f"F1={f1:.4f}, Precision={precision:.4f}, Recall={recall:.4f}, AUC={auc:.4f}")
+    print(f"F1={f1:.4f}, Precision={precision:.4f}, Recall={recall:.4f}, "
+          f"AUC={auc:.4f}, PR_AUC={pr_auc:.4f}, Accuracy={accuracy:.4f}")
 
 if __name__ == "__main__":
     main()

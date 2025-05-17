@@ -6,7 +6,7 @@ from sklearn.preprocessing import LabelEncoder
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 import matplotlib.pyplot as plt
-from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, precision_recall_curve, auc
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, precision_recall_curve, auc, accuracy_score
 from tqdm import tqdm
 import os
 
@@ -76,6 +76,8 @@ for fold_num, (train_idx, test_idx) in enumerate(kf.split(X_scaled)):
     recall = recall_score(y_test, y_pred)
     f1 = f1_score(y_test, y_pred)
     auc_value = roc_auc_score(y_test, y_pred)
+    accuracy = accuracy_score(y_test, y_pred)
+
     
     # PR-AUC
     precision_curve, recall_curve, _ = precision_recall_curve(y_test, model.predict(X_test))
@@ -87,6 +89,7 @@ for fold_num, (train_idx, test_idx) in enumerate(kf.split(X_scaled)):
         'F1-Score': f1,
         'Precision': precision,
         'Recall': recall,
+        'Accuracy': accuracy,
         'ROC-AUC': auc_value,
         'PR-AUC': pr_auc
     })
@@ -95,6 +98,7 @@ for fold_num, (train_idx, test_idx) in enumerate(kf.split(X_scaled)):
     print(f"F1-Score: {f1:.4f}")
     print(f"Precision: {precision:.4f}")
     print(f"Recall: {recall:.4f}")
+    print(f"Accuracy: {accuracy:.4f}")
     print(f"ROC-AUC: {auc_value:.4f}")
     print(f"PR-AUC: {pr_auc:.4f}")
 

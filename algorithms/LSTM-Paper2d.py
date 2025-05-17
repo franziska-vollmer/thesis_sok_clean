@@ -4,7 +4,7 @@ from sklearn.model_selection import KFold, train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
-from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, precision_recall_curve, auc
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, precision_recall_curve, auc, accuracy_score
 from tqdm import tqdm
 import os
 
@@ -77,6 +77,7 @@ for fold_num, (train_idx, val_idx) in enumerate(kf.split(X_train_full)):
     recall = recall_score(y_val, y_pred_val)
     f1 = f1_score(y_val, y_pred_val)
     auc_value = roc_auc_score(y_val, y_pred_val)
+    accuracy = accuracy_score(y_val, y_pred_val)
     
     # PR-AUC
     precision_curve, recall_curve, _ = precision_recall_curve(y_val, model.predict(X_val))
@@ -88,6 +89,7 @@ for fold_num, (train_idx, val_idx) in enumerate(kf.split(X_train_full)):
         'F1-Score': f1,
         'Precision': precision,
         'Recall': recall,
+        'Accuracy': accuracy,
         'ROC-AUC': auc_value,
         'PR-AUC': pr_auc
     })
@@ -96,6 +98,7 @@ for fold_num, (train_idx, val_idx) in enumerate(kf.split(X_train_full)):
     print(f"F1-Score: {f1:.4f}")
     print(f"Precision: {precision:.4f}")
     print(f"Recall: {recall:.4f}")
+    print(f"Accuracy: {accuracy:.4f}")
     print(f"ROC-AUC: {auc_value:.4f}")
     print(f"PR-AUC: {pr_auc:.4f}")
 
@@ -111,6 +114,7 @@ precision_test = precision_score(y_test, y_pred_test)
 recall_test = recall_score(y_test, y_pred_test)
 f1_test = f1_score(y_test, y_pred_test)
 auc_value_test = roc_auc_score(y_test, y_pred_test)
+accuracy = accuracy_score(y_test, y_pred_test)
 
 # PR-AUC auf dem Testset
 precision_curve_test, recall_curve_test, _ = precision_recall_curve(y_test, model.predict(X_test))
@@ -120,6 +124,7 @@ print(f"\nTestset Metriken:")
 print(f"F1-Score: {f1_test:.4f}")
 print(f"Precision: {precision_test:.4f}")
 print(f"Recall: {recall_test:.4f}")
+print(f"Accuracy: {accuracy:.4f}")
 print(f"ROC-AUC: {auc_value_test:.4f}")
 print(f"PR-AUC: {pr_auc_test:.4f}")
 

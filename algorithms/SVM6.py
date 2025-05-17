@@ -8,7 +8,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 from sklearn.metrics import (
     classification_report, confusion_matrix,
-    roc_auc_score, average_precision_score, precision_recall_fscore_support
+    roc_auc_score, average_precision_score, precision_recall_fscore_support, accuracy_score
 )
 
 # === RSVM-Funktionen ===
@@ -88,6 +88,9 @@ for fold, (train_idx, test_idx) in enumerate(skf.split(X, y), 1):
         y_test, y_pred, labels=[-1], average='binary'
     )
 
+    # Accuracy
+    accuracy = accuracy_score(y_test, y_pred)
+
     # ROC-AUC und PR-AUC
     roc_auc = roc_auc_score((y_test == -1).astype(int), y_score)
     pr_auc = average_precision_score((y_test == -1).astype(int), y_score)
@@ -97,6 +100,7 @@ for fold, (train_idx, test_idx) in enumerate(skf.split(X, y), 1):
         "Precision": precision,
         "Recall": recall,
         "F1-Score": f1,
+        "Accuracy": accuracy,  # Hier wird die Accuracy hinzugefügt
         "ROC-AUC": roc_auc,
         "PR-AUC": pr_auc
     })

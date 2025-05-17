@@ -9,7 +9,8 @@ from sklearn.svm import SVC
 from sklearn.metrics import (
     precision_recall_fscore_support,
     roc_auc_score,
-    average_precision_score
+    average_precision_score,
+    accuracy_score
 )
 
 # === RSVM-Funktionen ===
@@ -85,6 +86,7 @@ for fold, (train_idx, _) in enumerate(skf.split(X, y), 1):
     )
     roc_auc = roc_auc_score((y_train == -1).astype(int), y_score)
     pr_auc = average_precision_score((y_train == -1).astype(int), y_score)
+    accuracy = accuracy_score(y_train, y_pred)
 
     results.append({
         "Fold": fold,
@@ -92,7 +94,8 @@ for fold, (train_idx, _) in enumerate(skf.split(X, y), 1):
         "Recall": recall,
         "F1-Score": f1,
         "ROC-AUC": roc_auc,
-        "PR-AUC": pr_auc
+        "PR-AUC": pr_auc,
+        "Accuracy": accuracy
     })
 
 # === Ausgabe der Ergebnisse ===

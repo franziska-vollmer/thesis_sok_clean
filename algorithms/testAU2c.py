@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, average_precision_score
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, average_precision_score, accuracy_score
 import matplotlib.pyplot as plt
 
 # ==== 1. Daten laden ====
@@ -138,9 +138,10 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(X, y)):
     f1 = f1_score(y_val_np, final_preds)
     auc = roc_auc_score(y_val_np, recon_errors)
     pr_auc = average_precision_score(y_val_np, recon_errors)
+    accuracy = accuracy_score(y_val_np, final_preds)  # Accuracy berechnen
 
     print(f"📈 Fold {fold+1} Results — Precision: {precision:.4f}, Recall: {recall:.4f}, "
-          f"F1: {f1:.4f}, AUC: {auc:.4f}, PR-AUC: {pr_auc:.4f}")
+          f"F1: {f1:.4f}, AUC: {auc:.4f}, PR-AUC: {pr_auc:.4f}, Accuracy: {accuracy:.4f}")
 
     fold_results.append({
         'fold': fold + 1,
@@ -148,7 +149,8 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(X, y)):
         'recall': recall,
         'f1': f1,
         'auc': auc,
-        'pr_auc': pr_auc
+        'pr_auc': pr_auc,
+        'accuracy': accuracy  # Accuracy speichern
     })
 
 # ==== 7. Gesamtauswertung ====
@@ -156,14 +158,15 @@ print("\n📊 Ergebnisse pro Fold:")
 for res in fold_results:
     print(f"Fold {res['fold']}: "
           f"Precision={res['precision']:.4f}, Recall={res['recall']:.4f}, "
-          f"F1={res['f1']:.4f}, AUC={res['auc']:.4f}, PR-AUC={res['pr_auc']:.4f}")
+          f"F1={res['f1']:.4f}, AUC={res['auc']:.4f}, PR-AUC={res['pr_auc']:.4f}, Accuracy={res['accuracy']:.4f}")
 
 avg_metrics = {
     'precision': np.mean([r['precision'] for r in fold_results]),
     'recall': np.mean([r['recall'] for r in fold_results]),
     'f1': np.mean([r['f1'] for r in fold_results]),
     'auc': np.mean([r['auc'] for r in fold_results]),
-    'pr_auc': np.mean([r['pr_auc'] for r in fold_results])
+    'pr_auc': np.mean([r['pr_auc'] for r in fold_results]),
+    'accuracy': np.mean([r['accuracy'] for r in fold_results])  # Durchschnittliche Accuracy berechnen
 }
 
 print("\n📈 Durchschnitt über alle Folds:")
@@ -172,3 +175,4 @@ print(f"📡 Recall    : {avg_metrics['recall']:.4f}")
 print(f"✅ F1 Score  : {avg_metrics['f1']:.4f}")
 print(f"🏁 AUC Score : {avg_metrics['auc']:.4f}")
 print(f"📐 PR-AUC    : {avg_metrics['pr_auc']:.4f}")
+print(f"✔️ Accuracy  : {avg_metrics['accuracy']:.4f}")  # Durchschnittliche Genauigkeit anzeigen

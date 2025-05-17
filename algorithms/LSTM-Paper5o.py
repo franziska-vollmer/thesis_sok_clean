@@ -2,12 +2,12 @@ import os
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score, classification_report, roc_auc_score, average_precision_score
 from imblearn.over_sampling import SMOTE
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.optimizers import Adam
+from sklearn.model_selection import KFold
 
 # 1. Verzeichnis durchsuchen, um alle .pkl Dateien zu finden
 directory_path = '/home/franziska/sok-utsa-tuda-evalutation-of-docker-containers/algorithms/train_test_supervised_with_timestamp/'
@@ -56,16 +56,7 @@ X_lstm_flat, y_lstm_flat = smote.fit_resample(X_lstm.reshape(X_lstm.shape[0], -1
 X_lstm_resampled = X_lstm_flat.reshape(X_lstm_flat.shape[0], time_step, X_lstm.shape[2])
 y_lstm_resampled = y_lstm_flat
 
-# 7. Testdaten erstellen, die nicht in der Cross-Validation verwendet werden
-train_size = int(len(combined_data) * 0.8)  # 80% für Training, 20% für Test
-X_train, y_train = combined_data.iloc[:train_size, :-1].values, combined_data.iloc[:train_size, -1].values
-X_test, y_test = combined_data.iloc[train_size:, :-1].values, combined_data.iloc[train_size:, -1].values
-
-# Skalierung der Testdaten
-X_test_scaled = scaler.transform(X_test)
-X_test_lstm, y_test_lstm = create_dataset(X_test_scaled, y_test, time_step)
-
-# KFold Cross-Validation (hier wird das Testset nie verwendet)
+# 5. KFold Cross-Validation
 kf = KFold(n_splits=5, shuffle=True, random_state=42)
 
 results = []
@@ -82,22 +73,22 @@ for fold, (train_index, val_index) in enumerate(kf.split(X_lstm_resampled), 1):
     model.add(Dense(1, activation='tanh'))
     model.compile(optimizer=Adam(), loss='mean_squared_error', metrics=['accuracy'])
 
-    # Training des Modells
+    # Trainieren des Modells mit den Daten des aktuellen Folds, inkl. Testdaten
     model.fit(X_train_fold, y_train_fold, epochs=10, batch_size=64, validation_data=(X_val_fold, y_val_fold), verbose=0)
 
-    # Vorhersagen auf dem **Testset** für jedes Fold
-    final_predictions = model.predict(X_test_lstm)
-    final_predictions = np.round(final_predictions)
+    # Vorhersagen auf den aktuellen Validierungsdaten des aktuellen Folds
+    final_predictions = model.predict(X_val_fold)
+    final_predictions = np.round(final_predictions)  # Rundung auf -1 oder 1
 
-    # Berechnung der Metriken für das **Testset** pro Fold
-    final_classification_rep = classification_report(y_test_lstm, final_predictions, output_dict=True, zero_division=1)
-    final_roc_auc = roc_auc_score(y_test_lstm, final_predictions)
-    final_pr_auc = average_precision_score(y_test_lstm, final_predictions)
+    # Berechnung der Metriken für den aktuellen Fold
+    final_classification_rep = classification_report(y_val_fold, final_predictions, output_dict=True, zero_division=1)
+    final_roc_auc = roc_auc_score(y_val_fold, final_predictions)
+    final_pr_auc = average_precision_score(y_val_fold, final_predictions)
 
-    # Berechnung der Accuracy für das **Testset** pro Fold
-    accuracy = accuracy_score(y_test_lstm, final_predictions)
+    # Berechnung der Accuracy für den aktuellen Fold
+    accuracy = accuracy_score(y_val_fold, final_predictions)
 
-    # Speichern der Ergebnisse für das Testset des aktuellen Folds
+    # Speichern der Ergebnisse für den aktuellen Fold
     results.append({
         "Fold": fold,
         "Accuracy": accuracy,
@@ -108,7 +99,7 @@ for fold, (train_index, val_index) in enumerate(kf.split(X_lstm_resampled), 1):
         "PR-AUC": final_pr_auc
     })
 
-# Ergebnisse der Cross-Validation auf den Testdaten anzeigen
+# Ergebnisse der Cross-Validation anzeigen
 results_df = pd.DataFrame(results)
 print("\nFOLD | Accuracy | Precision | Recall | F1-Score | ROC-AUC | PR-AUC")
 for index, row in results_df.iterrows():

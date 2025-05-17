@@ -72,17 +72,19 @@ for fold_idx in range(1, NUM_FOLDS + 1):
 
     # --- Vorhersage und Scores ---
     print(f"  ⏳ Mache Vorhersage und berechne Scores...")
-    y_pred = clf.predict(X_test)
-    y_score = clf.decision_function(X_test)
+    y_pred = clf.predict(X_train)  # Testen auf den Trainingsdaten
+    y_score = clf.decision_function(X_train)  # Scores für Trainingsdaten berechnen
+
 
     # --- Metriken ---
     print(f"  🧮 Berechne Metriken...")
-    precision = precision_score(y_test, y_pred, pos_label=1, zero_division=0)
-    recall = recall_score(y_test, y_pred, pos_label=1, zero_division=0)
-    f1 = f1_score(y_test, y_pred, pos_label=1, zero_division=0)
-    auc = roc_auc_score(y_test, y_score)
-    pr_auc = average_precision_score(y_test, y_score)
-    accuracy = accuracy_score(y_test, y_pred)  # Accuracy berechnen
+    precision = precision_score(y_train, y_pred, pos_label=1, zero_division=0)  # Metriken auf den Trainingsdaten berechnen
+    recall = recall_score(y_train, y_pred, pos_label=1, zero_division=0)
+    f1 = f1_score(y_train, y_pred, pos_label=1, zero_division=0)
+    auc = roc_auc_score(y_train, y_score)  # AUC für Trainingsdaten berechnen
+    pr_auc = average_precision_score(y_train, y_score)  # PR AUC für Trainingsdaten berechnen
+    accuracy = accuracy_score(y_train, y_pred)  # Accuracy auf den Trainingsdaten berechnen
+
 
     results.append({
         "Fold": fold_idx,

@@ -6,7 +6,7 @@ from sklearn.preprocessing import LabelEncoder
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import GRU, Dense, Dropout
 import matplotlib.pyplot as plt
-from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, precision_recall_curve, auc
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, precision_recall_curve, auc, accuracy_score
 from tqdm import tqdm
 import os
 
@@ -76,6 +76,7 @@ for fold_num, (train_idx, test_idx) in enumerate(kf.split(X_scaled)):
     recall = recall_score(y_test, y_pred)
     f1 = f1_score(y_test, y_pred)
     auc_value = roc_auc_score(y_test, y_pred)
+    accuracy = accuracy_score(y_test, y_pred)
     
     # PR-AUC
     precision_curve, recall_curve, _ = precision_recall_curve(y_test, model.predict(X_test))
@@ -88,7 +89,8 @@ for fold_num, (train_idx, test_idx) in enumerate(kf.split(X_scaled)):
         'Precision': precision,
         'Recall': recall,
         'ROC-AUC': auc_value,
-        'PR-AUC': pr_auc
+        'PR-AUC': pr_auc,
+        'Accuracy': accuracy
     })
     
     # Ausgabe der Metriken für dieses Fold
@@ -97,6 +99,7 @@ for fold_num, (train_idx, test_idx) in enumerate(kf.split(X_scaled)):
     print(f"Recall: {recall:.4f}")
     print(f"ROC-AUC: {auc_value:.4f}")
     print(f"PR-AUC: {pr_auc:.4f}")
+    print(f"Accuracy: {accuracy:.4f}")
 
 # Schritt 10: Ergebnisse in einer Tabelle anzeigen
 results_df = pd.DataFrame(results_table)

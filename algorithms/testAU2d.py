@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import StratifiedKFold, train_test_split
-from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, average_precision_score
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, average_precision_score, accuracy_score
 import matplotlib.pyplot as plt
 
 # ==== 1. Daten laden ====
@@ -125,9 +125,10 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(X_train_all, y_train_all))
     f1 = f1_score(y_val_np, final_preds)
     auc = roc_auc_score(y_val_np, recon_errors)
     pr_auc = average_precision_score(y_val_np, recon_errors)
+    accuracy = accuracy_score(y_val_np, final_preds)  # Accuracy berechnen
 
     print(f"📈 Fold {fold+1} — Precision: {precision:.4f}, Recall: {recall:.4f}, "
-          f"F1: {f1:.4f}, AUC: {auc:.4f}, PR-AUC: {pr_auc:.4f}")
+          f"F1: {f1:.4f}, AUC: {auc:.4f}, PR-AUC: {pr_auc:.4f}, Accuracy: {accuracy:.4f}")
 
     fold_results.append({
         'fold': fold + 1,
@@ -135,7 +136,8 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(X_train_all, y_train_all))
         'recall': recall,
         'f1': f1,
         'auc': auc,
-        'pr_auc': pr_auc
+        'pr_auc': pr_auc,
+        'accuracy': accuracy  # Accuracy speichern
     })
 
 # ==== 8. Durchschnitt über Folds ====
@@ -143,7 +145,7 @@ print("\n📊 Ergebnisse pro Fold:")
 for res in fold_results:
     print(f"Fold {res['fold']}: "
           f"Precision={res['precision']:.4f}, Recall={res['recall']:.4f}, "
-          f"F1={res['f1']:.4f}, AUC={res['auc']:.4f}, PR-AUC={res['pr_auc']:.4f}")
+          f"F1={res['f1']:.4f}, AUC={res['auc']:.4f}, PR-AUC={res['pr_auc']:.4f}, Accuracy={res['accuracy']:.4f}")
 
 avg = lambda key: np.mean([res[key] for res in fold_results])
 print("\n📈 Durchschnitt über alle Folds:")
@@ -152,23 +154,7 @@ print(f"📡 Recall    : {avg('recall'):.4f}")
 print(f"✅ F1 Score  : {avg('f1'):.4f}")
 print(f"🏁 AUC Score : {avg('auc'):.4f}")
 print(f"📐 PR-AUC    : {avg('pr_auc'):.4f}")
-
-# ==== 9. Training auf gesamten Trainingsdaten für finalen Test ====
-print("\n🧪 Trainiere finales Modell auf allen Trainingsdaten ...")
-final_model = LSTMAutoencoder().to(device)
-optimizer = torch.optim.Adam(final_model.parameters(), lr=1e-3)
-criterion = torch.nn.MSELoss()
-train_loader = DataLoader(TensorDataset(X_train_all), batch_size=64, shuffle=True)
-
-for epoch in range(epochs):
-    final_model.train()
-    for x_batch, in train_loader:
-        x_batch = x_batch.to(device)
-        optimizer.zero_grad()
-        recon = final_model(x_batch)
-        loss = criterion(recon, x_batch)
-        loss.backward()
-        optimizer.step()
+print(f"📊 Accuracy  : {avg('accuracy'):.4f}")  # Durchschnittliche Accuracy
 
 # ==== 10. Evaluation auf dem Testset ====
 final_model.eval()
@@ -199,6 +185,7 @@ recall = recall_score(y_test_np, final_preds)
 f1 = f1_score(y_test_np, final_preds)
 auc = roc_auc_score(y_test_np, recon_errors_test)
 pr_auc = average_precision_score(y_test_np, recon_errors_test)
+accuracy = accuracy_score(y_test_np, final_preds)  # Accuracy für den finalen Test
 
 print("\n🏁 📊 Finale Testset-Ergebnisse (auf ungesehenen Daten):")
 print(f"🎯 Precision : {precision:.4f}")
@@ -206,27 +193,5 @@ print(f"📡 Recall    : {recall:.4f}")
 print(f"✅ F1 Score  : {f1:.4f}")
 print(f"🏁 AUC Score : {auc:.4f}")
 print(f"📐 PR-AUC    : {pr_auc:.4f}")
-
-# === Ergebnisse anzeigen ===
-f1s = [r["f1"] for r in fold_results]
-precisions = [r["precision"] for r in fold_results]
-recalls = [r["recall"] for r in fold_results]
-aucs = [r["auc"] for r in fold_results]
-pr_aucs = [r["pr_auc"] for r in fold_results]
-
-print("\n📊 Cross-Validation Ergebnisse (Train != Test):")
-for r in fold_results:
-    print(f"Fold {r['fold']}: "
-          f"F1={r['f1']:.4f}, "
-          f"Precision={r['precision']:.4f}, "
-          f"Recall={r['recall']:.4f}, "
-          f"AUC={r['auc']:.4f}, "
-          f"PR-AUC={r['pr_auc']:.4f}")
-
-print("\n📈 Durchschnitt ± Standardabweichung:")
-print(f"F1        : {np.mean(f1s):.4f} ± {np.std(f1s):.4f}")
-print(f"Precision : {np.mean(precisions):.4f} ± {np.std(precisions):.4f}")
-print(f"Recall    : {np.mean(recalls):.4f} ± {np.std(recalls):.4f}")
-print(f"AUC       : {np.mean(aucs):.4f} ± {np.std(aucs):.4f}")
-print(f"PR-AUC    : {np.mean(pr_aucs):.4f} ± {np.std(pr_aucs):.4f}")
+print(f"📊 Accuracy  : {accuracy:.4f}")  # Accuracy im finalen Testset
 

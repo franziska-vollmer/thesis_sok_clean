@@ -13,8 +13,8 @@ The thesis explores deep learning techniques for detecting anomalies in containe
 
 - Support Vector Machines (SVM)
 - Convolutional Neural Networks (CNN)
-- Long Short-Term Memory networks (LSTM)
-- Autoencoders
+- Long Short-Term Memory Networks (LSTM)
+- Autoencoders (AE)
 
 The results demonstrate that deep learning models, particularly recurrent architectures, significantly outperform traditional methods in detecting complex runtime threats.
 

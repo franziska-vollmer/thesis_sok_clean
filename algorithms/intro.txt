@@ -1,1 +1,0 @@
-This folder contains all the algorithms with the 'train and test with the same dataset' scenario.
